@@ -6,7 +6,10 @@ import os, sys
 
 import pandas as pd
 import numpy as np
-import tensorflow as tf
+
+import tensorflow.compat.v1 as tf
+tf.disable_v2_behavior()
+
 
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 from sklearn import preprocessing
@@ -38,7 +41,7 @@ RATING_MEAN_FILE_NAME = RATING_MEAN_FILE_NAME + "_" + SPARITY + ".npy"
 RATING_VAR_FILE_NAME = RATING_VAR_FILE_NAME + "_" + SPARITY + ".npy"
 # TRAINING_FILE = "./train.txt"
 USER2TOPIC_FILE_NAME = USER2TOPIC_FILE_NAME + "_" + SPARITY + ".npy"
-SERVICE2TOPIC_FILE_NAME =  SERVICE2TOPIC_FILE_NAME + "_" + SPARITY + ".npy"
+SERVICE2TOPIC_FILE_NAME = SERVICE2TOPIC_FILE_NAME + "_" + SPARITY + ".npy"
 TRAIN_RECORD_FILE = TRAIN_RECORD_FILE + "_" + SPARITY + ".npy"
 TEST_RECORD_FILE = TEST_RECORD_FILE + "_" + SPARITY + ".npy"
 
@@ -133,7 +136,6 @@ with tf.variable_scope("LOSS", reuse=tf.AUTO_REUSE):
 with tf.variable_scope("MSE", reuse=tf.AUTO_REUSE):
 	tf.summary.scalar('rmse', tf_rmse)
 
-
 summaryMerged = tf.summary.merge_all()
 filename = './log/adam'
 writer = tf.summary.FileWriter(filename)
@@ -181,32 +183,32 @@ pre_loss = 0
 diff_loss_threshold = 1e-7
 
 for i in range(ITERATION_SIZE):
-	_, summary, _loss, tf_rmse_, _train_loss, _regular = sess.run([train, summaryMerged, loss, tf_rmse, train_loss, l_regular])
+	_, summary, _loss, tf_rmse_, _train_loss, _regular = sess.run(
+		[train, summaryMerged, loss, tf_rmse, train_loss, l_regular])
 	step = sess.run(update_op)
-
 
 	# sys.stdout.write("train loss: %f, l2 loss: %f \r" % (float(_train_loss), float(_regular)))
 	# sys.stdout.flush()
-
 
 	# if i % VAL_EPOCHO == 0:
 	if True:
 		summary, _val_loss, _avg_l_regular = sess.run([summaryMerged, val_loss, avg_l_regular])
 		# print("val loss: %f" % _val_loss)
-		sys.stdout.write("train loss: %f, l2 loss: %f, val loss: %f \r" % (float(_train_loss), float(_avg_l_regular), float(_val_loss)))
+		sys.stdout.write("train loss: %f, l2 loss: %f, val loss: %f \r" % (
+			float(_train_loss), float(_avg_l_regular), float(_val_loss)))
 		sys.stdout.flush()
 	else:
-		sys.stdout.write("train loss: %f, l2 loss: %f, val loss: %f \r" % (float(_train_loss), float(_regular), float(_val_loss)))
+		sys.stdout.write(
+			"train loss: %f, l2 loss: %f, val loss: %f \r" % (float(_train_loss), float(_regular), float(_val_loss)))
 		# sys.stdout.write("train loss: %f, l2 loss: %f, \r" % (float(_train_loss), float(_regular)))
 		sys.stdout.flush()
 
 	# _loss = sess.run([loss])
 
-
 	if step > DECAY_STEP:
 		check_value = sess.run(check)
-		# decay_value = sess.run(ratio)
-		# print ("decay ration: %f" % decay_value)
+	# decay_value = sess.run(ratio)
+	# print ("decay ration: %f" % decay_value)
 
 	"""
 		diff = np.abs(check_value - all_size)
@@ -214,7 +216,6 @@ for i in range(ITERATION_SIZE):
 		print("value: %f" % sess.run(max_value))
 
 	"""
-
 
 	delta_loss = np.abs(_loss - pre_loss)
 	if delta_loss < diff_loss_threshold:
@@ -239,8 +240,8 @@ Current_X_parameters, Current_Theta_parameters = sess.run([X_parameters, Theta_p
 
 predicts = np.dot(Current_X_parameters, Current_Theta_parameters.T)
 
-def compute_error(predict, ground_truth):
 
+def compute_error(predict, ground_truth):
 	errors = np.sqrt(np.sum(((predict - ground_truth)) ** 2)) / (len(ground_truth.reshape(-1)))
 
 	mae_error = mean_absolute_error(ground_truth, predict)
@@ -251,22 +252,23 @@ def compute_error(predict, ground_truth):
 
 	return errors, mae_error, rmse_error, r2_coefficient
 
+
 errors, mae_error, rmse_error, r2_coefficient = compute_error(predicts[record], train_matrix[record])
 
-print ('-------------------------')
+print('-------------------------')
 
-print ('train_avg_error', errors)
-print ('train_mae_error', mae_error)
-print ('train_mse_error', rmse_error)
-print ('train_r2_score', r2_coefficient)
-print ("after predict sparse:", computeS(predicts))
+print('train_avg_error', errors)
+print('train_mae_error', mae_error)
+print('train_mse_error', rmse_error)
+print('train_r2_score', r2_coefficient)
+print("after predict sparse:", computeS(predicts))
 
-print ('-------------------------')
+print('-------------------------')
 
 errors, mae_error, rmse_error, r2_coefficient = compute_error(predicts[test_record], validation_matrix[test_record])
 
-print ('test_avg_error', errors)
-print ('test_mae_error', mae_error)
-print ('test_mse_error', rmse_error)
-print ('test_r2_score', r2_coefficient)
-print ("after predict sparse:", computeS(predicts[test_record]))
+print('test_avg_error', errors)
+print('test_mae_error', mae_error)
+print('test_mse_error', rmse_error)
+print('test_r2_score', r2_coefficient)
+print("after predict sparse:", computeS(predicts[test_record]))

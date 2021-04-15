@@ -6,12 +6,15 @@ import os, sys
 
 import pandas as pd
 import numpy as np
-import tensorflow as tf
+
+import tensorflow.compat.v1 as tf
+tf.disable_v2_behavior()
+
 
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 from sklearn import preprocessing
 
-SPARITY = 0.8
+SPARITY = 0.1
 
 if len(sys.argv) != 1:
 	SPARITY = sys.argv[1]
@@ -38,10 +41,9 @@ RATING_MEAN_FILE_NAME = RATING_MEAN_FILE_NAME + "_" + SPARITY + ".npy"
 RATING_VAR_FILE_NAME = RATING_VAR_FILE_NAME + "_" + SPARITY + ".npy"
 # TRAINING_FILE = "./train.txt"
 USER2TOPIC_FILE_NAME = USER2TOPIC_FILE_NAME + "_" + SPARITY + ".npy"
-SERVICE2TOPIC_FILE_NAME =  SERVICE2TOPIC_FILE_NAME + "_" + SPARITY + ".npy"
+SERVICE2TOPIC_FILE_NAME = SERVICE2TOPIC_FILE_NAME + "_" + SPARITY + ".npy"
 TRAIN_RECORD_FILE = TRAIN_RECORD_FILE + "_" + SPARITY + ".npy"
 TEST_RECORD_FILE = TEST_RECORD_FILE + "_" + SPARITY + ".npy"
-
 
 LAMBDA = 1e-4
 ITERATION_SIZE = 1000
@@ -67,38 +69,40 @@ test_record = np.load(TEST_RECORD_FILE)
 record = train_record
 test_record = test_record
 
-index = record
-
 shape = matrix.shape
 x = shape[0]
 y = shape[1]
 
 
+"""
 min_max_scaler = preprocessing.MinMaxScaler()
 
 val_scaler = min_max_scaler.fit(train_matrix)
 validation_matrix = val_scaler.transform(validation_matrix)
 train_matrix = val_scaler.transform(train_matrix)
 matrix = val_scaler.transform(matrix)
-
 """
+
 validation_matrix = validation_matrix / 10.
 train_matrix = train_matrix / 10.
-"""
 
 # validation_matrix = validation_matrix / 10.
 # train_matrix = train_matrix / 10.
 
-# 构建模型
 
-X_parameters = tf.Variable(tf.random_normal([x, num_features], stddev=1))
-# X_parameters = tf.Variable(user2topic_matrix)
-Theta_parameters = tf.Variable(tf.random_normal([y, num_features], stddev=1))
-# Theta_parameters = tf.Variable(service2topic_matrix)
+# without pre-determine technology
+# X_parameters = tf.Variable(tf.random_normal([x, num_features], stddev=1))
+# Theta_parameters = tf.Variable(tf.random_normal([y, num_features], stddev=1))
+
+# with pre-determine technology
+X_parameters = tf.Variable(user2topic_matrix)
+Theta_parameters = tf.Variable(service2topic_matrix)
 
 y_predict = tf.matmul(X_parameters, Theta_parameters, transpose_b=True)
+decay = 1e-2
+step = 0
 
-#  train_loss = tf.reduce_sum(((y_predict - train_matrix)) ** 2) / (matrix.shape[0] * matrix.shape[1])
+
 train_loss = tf.reduce_sum(((y_predict - train_matrix) * train_record) ** 2) / np.sum(train_record)
 val_loss = tf.reduce_sum(((y_predict - validation_matrix) * test_record) ** 2) / np.sum(test_record)
 
@@ -108,7 +112,7 @@ regular = LAMBDA * (X_l2_regular + Theta_l2_regular)
 
 loss = train_loss + regular
 
-tf_rmse = tf.reduce_sum(((y_predict - matrix)*record) ** 2) / np.sum(record)
+tf_rmse = tf.reduce_sum(((y_predict - matrix) * record) ** 2) / np.sum(record)
 
 # loss = loss + tf_rmse
 
@@ -122,7 +126,6 @@ with tf.variable_scope("LOSS", reuse=tf.AUTO_REUSE):
 with tf.variable_scope("MSE", reuse=tf.AUTO_REUSE):
 	tf.summary.scalar('rmse', tf_rmse)
 
-
 summaryMerged = tf.summary.merge_all()
 filename = './log/adam'
 writer = tf.summary.FileWriter(filename)
@@ -131,13 +134,13 @@ init = tf.global_variables_initializer()
 sess.run(init)
 
 # print (matrix.shape)
-print (record.shape)
-print (np.sum(record))
+# print(record.shape)
+# print(np.sum(record))
 
 
 def computeS(matrix):
 	num = len(matrix.reshape(-1))
-	s1 = np.sum(matrix)
+	s1 = np.sum(np.abs(matrix))
 	s2 = np.sum(matrix ** 2)
 
 	s2 = np.sqrt(s2)
@@ -147,11 +150,10 @@ def computeS(matrix):
 
 	return a / b
 
-print(computeS(matrix))
-print(computeS(train_matrix))
 
 for i in range(ITERATION_SIZE):
-	_, summary, _loss, tf_rmse_ , _train_loss, _regular = sess.run([train, summaryMerged, loss, tf_rmse, train_loss, regular])
+	_, summary, _loss, tf_rmse_, _train_loss, _regular, pred = sess.run(
+		[train, summaryMerged, loss, tf_rmse, train_loss, regular, y_predict])
 
 	if i % VAL_EPOCHO == 0:
 		summary, _val_loss = sess.run([summaryMerged, val_loss])
@@ -180,37 +182,37 @@ Current_X_parameters, Current_Theta_parameters = sess.run([X_parameters, Theta_p
 
 predicts = np.dot(Current_X_parameters, Current_Theta_parameters.T)
 
-def compute_error(predict, ground_truth):
 
+def compute_error(predict, ground_truth):
 	errors = np.sqrt(np.sum((predict - ground_truth) ** 2)) / (len(ground_truth.reshape(-1)))
 
 	mae_error = mean_absolute_error(ground_truth, predict)
 	rmse_error = mean_squared_error(ground_truth, predict)
 
-	r2_coefficient = r2_score(ground_truth, predict)
+	r2_coefficient = r2_score(y_true=ground_truth, y_pred=predict)
 
 	return errors, mae_error, rmse_error, r2_coefficient
 
+
 errors, mae_error, rmse_error, r2_coefficient = compute_error(predicts[record], matrix[record])
 
-print ('-------------------------')
+print('-------------------------')
 
-print ('train_avg_error', errors)
-print ('train_mae_error', mae_error)
-print ('train_rmse_error', rmse_error)
-print ('train_r2_score', r2_coefficient)
-print ("after predict sparse:", computeS(predicts))
+print('train_avg_error', errors)
+print('train_mae_error', mae_error)
+print('train_rmse_error', rmse_error)
+print('train_r2_score', r2_coefficient)
+print("after predict sparse:", computeS(predicts))
 
-print ('-------------------------')
+print('-------------------------')
 
 errors, mae_error, rmse_error, r2_coefficient = compute_error(predicts[test_record], validation_matrix[test_record])
 
-print ('test_avg_error', errors)
-print ('test_mae_error', mae_error)
-print ('test_rmse_error', rmse_error)
-print ('test_r2_score', r2_coefficient)
-print ("after predict sparse:", computeS(predicts[test_record]))
-
+print('test_avg_error', errors)
+print('test_mae_error', mae_error)
+print('test_rmse_error', rmse_error)
+print('test_r2_score', r2_coefficient)
+print("after predict sparse:", computeS(predicts[test_record]))
 
 """
 # 第六步：--------------------------------------构建完整的电影推荐系统
